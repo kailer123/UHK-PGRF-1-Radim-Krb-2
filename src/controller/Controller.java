@@ -28,10 +28,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 import javax.swing.AbstractAction;
+import javax.swing.KeyStroke;
 
 import static java.awt.event.KeyEvent.VK_C;
 import static javax.swing.JComponent.WHEN_IN_FOCUSED_WINDOW;
 import static javax.swing.KeyStroke.getKeyStroke;
+import static java.awt.event.InputEvent.SHIFT_DOWN_MASK;
+import static java.awt.event.KeyEvent.VK_SHIFT;
 
 public class Controller {
 
@@ -39,6 +42,7 @@ public class Controller {
     private final Toolbar toolbar;
 
     private Line previewLine;
+    private Point lastMousePoint;
     private boolean lineMode;
     private final Polygon polygon;
     private final List<Line> lines;
@@ -95,13 +99,9 @@ public class Controller {
         toolbar.addSeedFillListener(_ -> toggleSeedFillMode());
         toolbar.addOrientationListener(_ -> toggleOrientation());
         toolbar.setClockwise(clippingPolygon.isClockwiseOnScreen());
-        canvas.getInputMap(WHEN_IN_FOCUSED_WINDOW).put(getKeyStroke(VK_C, 0), "clearCanvas");
-        canvas.getActionMap().put("clearCanvas", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent event) {
-                clearDrawing();
-            }
-        });
+        bindKey(getKeyStroke(VK_C, 0), "clearCanvas", this::clearDrawing);
+        bindKey(getKeyStroke(VK_SHIFT, SHIFT_DOWN_MASK, false), "shiftPressed", () -> updatePreview(true));
+        bindKey(getKeyStroke(VK_SHIFT, 0, true), "shiftReleased", () -> updatePreview(false));
 
         canvas.addMouseListener(new MouseAdapter() {
             @Override
@@ -127,7 +127,7 @@ public class Controller {
                 if (event.getButton() != MouseEvent.BUTTON1 || previewLine == null) {
                     return;
                 }
-                finishLine(getPoint(event));
+                finishLine(endPoint(getPoint(event), event.isShiftDown()));
             }
         });
 
@@ -139,7 +139,8 @@ public class Controller {
                 } else if (draggedCorner != NONE) {
                     dragCorner(getPoint(event));
                 } else if (previewLine != null) {
-                    previewLine = new Line(previewLine.getPoint1(), getPoint(event), PREVIEW_COLOR);
+                    lastMousePoint = getPoint(event);
+                    previewLine = new Line(previewLine.getPoint1(), endPoint(lastMousePoint, event.isShiftDown()), PREVIEW_COLOR);
                     render();
                 }
             }
@@ -193,6 +194,7 @@ public class Controller {
         lineMode = false;
         seedFillPoint = null;
         seedFillMode = false;
+        lastMousePoint = null;
         draggedVertex = NONE;
         draggedCorner = NONE;
         clippingPolygon.reset();
@@ -238,6 +240,7 @@ public class Controller {
             polygon.addLine(line);
         }
         previewLine = null;
+        lastMousePoint = null;
         render();
     }
 
@@ -298,6 +301,49 @@ public class Controller {
             result.addLine(preview);
         }
         return result;
+    }
+    private Point endPoint(Point mouse, boolean aligned) {
+        return aligned ? alignEndPoint(previewLine.getPoint1(), mouse) : mouse;
+    }
+    private void updatePreview(boolean aligned) {
+        if (previewLine == null || lastMousePoint == null) {
+            return;
+        }
+        previewLine = new Line(previewLine.getPoint1(), endPoint(lastMousePoint, aligned), PREVIEW_COLOR);
+        render();
+    }
+    private Point alignEndPoint(Point start, Point mouse) {
+        int dx = mouse.getX() - start.getX();
+        int dy = mouse.getY() - start.getY();
+        // Projection of the mouse onto the diagonal: |dx| = |dy| = average of both
+        int diagonal = (Math.abs(dx) + Math.abs(dy)) / 2;
+
+        Point[] candidates = {
+                new Point(mouse.getX(), start.getY()),
+                new Point(start.getX(), mouse.getY()),
+                new Point(start.getX() + Integer.signum(dx) * diagonal, start.getY() + Integer.signum(dy) * diagonal)
+        };
+
+        Point best = candidates[0];
+        for (Point candidate : candidates) {
+            if (distance(candidate, mouse) < distance(best, mouse)) {
+                best = candidate;
+            }
+        }
+        return best;
+    }
+
+    private double distance(Point a, Point b) {
+        return Math.hypot(a.getX() - b.getX(), a.getY() - b.getY());
+    }
+    private void bindKey(KeyStroke keyStroke, String name, Runnable action) {
+        canvas.getInputMap(WHEN_IN_FOCUSED_WINDOW).put(keyStroke, name);
+        canvas.getActionMap().put(name, new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent event) {
+                action.run();
+            }
+        });
     }
 
 }
