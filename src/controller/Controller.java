@@ -1,7 +1,6 @@
 package controller;
 
 import graphics.filler.ScanlineFiller;
-import graphics.filler.RecursiveSeedFiller;
 import graphics.filler.SeedFiller;
 import graphics.clipping.CohenSutherlandClipper;
 import graphics.clipping.LineClipper;
@@ -11,6 +10,9 @@ import graphics.rasterizer.PolygonOutlineRasterizer;
 import graphics.rasterizer.PolygonRasterizer;
 import graphics.rasterizer.XiaolinWuLineRasterizer;
 import graphics.rasterizer.LineRasterizer;
+import graphics.filler.FillCondition;
+import graphics.filler.QueueSeedFiller;
+import graphics.rasterizer.TrivialLineRasterizer;
 import model.Line;
 import model.Point;
 import model.Polygon;
@@ -57,6 +59,9 @@ public class Controller {
     private int draggedCorner = NONE;
     private Point seedFillPoint;
     private boolean seedFillMode;
+    private boolean borderCondition;
+    private final LineRasterizer solidLineRasterizer;
+    private final PolygonRasterizer solidPolygonRasterizer;
     private final SeedFiller seedFiller;
     private final ScanlineFiller scanlineFiller;
 
@@ -67,6 +72,7 @@ public class Controller {
     private static final int CLIPPING_POLYGON_COLOR = new Color(0xE6B85C).getRGB();
     private static final int CLIP_WINDOW_COLOR = new Color(0x6FA8DC).getRGB();
     private static final int FILL_COLOR = new Color(0x58BFA9).getRGB();
+    private static final int BORDER_COLOR = Color.WHITE.getRGB();
 
     private static final int NONE = -1;
     private static final int GRAB_RADIUS = 10;
@@ -88,7 +94,9 @@ public class Controller {
         this.lineClipper = new CohenSutherlandClipper();
         this.clipWindow = new ClipWindow(520, 100, 760, 400);
         this.scanlineFiller = new ScanlineFiller(canvas.getRaster());
-        this.seedFiller = new RecursiveSeedFiller(canvas.getRaster());
+        this.seedFiller = new QueueSeedFiller(canvas.getRaster());
+        this.solidLineRasterizer = new TrivialLineRasterizer(canvas.getRaster());
+        this.solidPolygonRasterizer = new PolygonOutlineRasterizer(solidLineRasterizer);
         this.lineRasterizer = new XiaolinWuLineRasterizer(canvas.getRaster());
         this.polygonRasterizer = new PolygonOutlineRasterizer(lineRasterizer);
     }
@@ -99,6 +107,7 @@ public class Controller {
         toolbar.addSeedFillListener(_ -> toggleSeedFillMode());
         toolbar.addOrientationListener(_ -> toggleOrientation());
         toolbar.setClockwise(clippingPolygon.isClockwiseOnScreen());
+        toolbar.addFillConditionListener(_ -> toggleFillCondition());
         bindKey(getKeyStroke(VK_C, 0), "clearCanvas", this::clearDrawing);
         bindKey(getKeyStroke(VK_SHIFT, SHIFT_DOWN_MASK, false), "shiftPressed", () -> updatePreview(true));
         bindKey(getKeyStroke(VK_SHIFT, 0, true), "shiftReleased", () -> updatePreview(false));
@@ -151,45 +160,63 @@ public class Controller {
 
     private void render() {
         canvas.clear();
-        renderPolygon();
-        renderLines();
+        boolean rasterBoundary = seedFillMode || seedFillPoint != null;
+        renderPolygon(!rasterBoundary);
+        renderLines(!rasterBoundary);
+        if (rasterBoundary) {
+            renderSeedFillBoundary();
+        }
         if (seedFillPoint != null) {
-            seedFiller.fill(seedFillPoint.getX(), seedFillPoint.getY(), canvas.getBackgroundColor(), FILL_COLOR);
+            seedFiller.fill(seedFillPoint.getX(), seedFillPoint.getY(), fillCondition(), FILL_COLOR);
         }
         canvas.repaint();
     }
 
-    private void renderPolygon() {
+    private void renderPolygon(boolean drawOutline) {
         Line polygonPreview = lineMode ? null : previewLine;
         Polygon boundary = clippingPolygon.toPolygon(CLIPPING_POLYGON_COLOR);
         Polygon clipped = clipper.clip(withPreviewLine(polygon, polygonPreview), boundary);
         scanlineFiller.fill(clipped, FILL_COLOR);
-        polygonRasterizer.rasterize(withColor(polygon, ORIGINAL_COLOR), polygonPreview);
+        if (drawOutline) {
+            polygonRasterizer.rasterize(withColor(polygon, ORIGINAL_COLOR), polygonPreview);
+        }
         polygonRasterizer.rasterize(withColor(clipped, CLIPPED_COLOR), null);
         polygonRasterizer.rasterize(boundary, null);
     }
-    private void renderLines() {
+
+    private void renderLines(boolean drawOutlines) {
         polygonRasterizer.rasterize(clipWindow.toPolygon(CLIP_WINDOW_COLOR), null);
         for (Line line : lines) {
-            renderClippedLine(line, ORIGINAL_COLOR);
+            if (drawOutlines) {
+                lineRasterizer.rasterize(withColor(line, ORIGINAL_COLOR));
+            }
+            renderClippedPart(line);
         }
         if (lineMode && previewLine != null) {
-            renderClippedLine(previewLine, PREVIEW_COLOR);
+            lineRasterizer.rasterize(previewLine);
+            renderClippedPart(previewLine);
         }
     }
 
-
-    private void renderClippedLine(Line line, int color) {
-        lineRasterizer.rasterize(new Line(line.getPoint1(), line.getPoint2(), color));
+    private void renderClippedPart(Line line) {
         Line clipped = lineClipper.clip(line, clipWindow);
         if (clipped != null) {
-            lineRasterizer.rasterize(new Line(clipped.getPoint1(), clipped.getPoint2(), CLIPPED_COLOR));
+            lineRasterizer.rasterize(withColor(clipped, CLIPPED_COLOR));
+        }
+    }
+
+    private void renderSeedFillBoundary() {
+        solidPolygonRasterizer.rasterize(withColor(polygon, BORDER_COLOR), null);
+        for (Line line : lines) {
+            solidLineRasterizer.rasterize(withColor(line, BORDER_COLOR));
         }
     }
 
     private void clearDrawing() {
         polygon.clear();
         lines.clear();
+        borderCondition = false;
+        toolbar.setBorderCondition(false);
         previewLine = null;
         lineMode = false;
         seedFillPoint = null;
@@ -272,7 +299,7 @@ public class Controller {
             return;
         }
 
-        boolean filled = seedFiller.fill(seed.getX(), seed.getY(), canvas.getBackgroundColor(), FILL_COLOR);
+        boolean filled = seedFiller.fill(seed.getX(), seed.getY(), fillCondition(), FILL_COLOR);
         if (filled) {
             seedFillPoint = seed;
             render();
@@ -345,7 +372,19 @@ public class Controller {
             }
         });
     }
-
+    private void toggleFillCondition() {
+        borderCondition = !borderCondition;
+        toolbar.setBorderCondition(borderCondition);
+        render();
+    }
+    private FillCondition fillCondition() {
+        return borderCondition
+                ? FillCondition.border(BORDER_COLOR, FILL_COLOR)
+                : FillCondition.background(canvas.getBackgroundColor());
+    }
+    private Line withColor(Line line, int color) {
+        return new Line(line.getPoint1(), line.getPoint2(), color);
+    }
 }
 
 

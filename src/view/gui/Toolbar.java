@@ -17,6 +17,7 @@ public final class Toolbar extends JPanel {
     private final Button seedFillButton;
     private final Button orientationButton;
     private final Button modeButton;
+    private final Button fillConditionButton;
 
     private static final Color DIVIDER = new Color(0x3A3E43);
     private static final Color BACKGROUND = new Color(0x25282C);
@@ -36,6 +37,8 @@ public final class Toolbar extends JPanel {
         seedFillButton = new Button("Seed fill", false);
         fillControls.setOpaque(false);
         fillControls.add(seedFillButton);
+        fillConditionButton = new Button("Omezení: pozadí", false);
+        fillControls.add(fillConditionButton);
         orientationButton = new Button("Orientace: CW", false);
         fillControls.add(orientationButton);
         add(fillControls, BorderLayout.WEST);
@@ -80,6 +83,14 @@ public final class Toolbar extends JPanel {
 
     public void addModeListener(ActionListener listener) {
         modeButton.addActionListener(listener);
+    }
+
+    public void setBorderCondition(boolean border) {
+        fillConditionButton.setText("Omezení: " + (border ? "hranice" : "pozadí"));
+    }
+
+    public void addFillConditionListener(ActionListener listener) {
+        fillConditionButton.addActionListener(listener);
     }
 
 }

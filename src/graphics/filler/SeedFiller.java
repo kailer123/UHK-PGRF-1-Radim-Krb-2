@@ -2,6 +2,6 @@ package graphics.filler;
 
 public interface SeedFiller {
 
-    boolean fill(int x1, int y1, int targetColor, int fillColor);
+    boolean fill(int x, int y, FillCondition condition, int fillColor);
 
 }
