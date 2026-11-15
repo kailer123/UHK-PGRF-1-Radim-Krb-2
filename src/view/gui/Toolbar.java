@@ -15,6 +15,7 @@ public final class Toolbar extends JPanel {
 
     private final Button clearButton;
     private final Button seedFillButton;
+    private final Button orientationButton;
 
     private static final Color DIVIDER = new Color(0x3A3E43);
     private static final Color BACKGROUND = new Color(0x25282C);
@@ -32,6 +33,8 @@ public final class Toolbar extends JPanel {
         seedFillButton = new Button("Seed fill", false);
         fillControls.setOpaque(false);
         fillControls.add(seedFillButton);
+        orientationButton = new Button("Orientace: CW", false);
+        fillControls.add(orientationButton);
         add(fillControls, BorderLayout.WEST);
 
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
@@ -58,6 +61,14 @@ public final class Toolbar extends JPanel {
 
     public void addSeedFillListener(ActionListener listener) {
         seedFillButton.addActionListener(listener);
+    }
+
+    public void setClockwise(boolean clockwise) {
+        orientationButton.setText("Orientace: " + (clockwise ? "CW" : "CCW"));
+    }
+
+    public void addOrientationListener(ActionListener listener) {
+        orientationButton.addActionListener(listener);
     }
 
 }
