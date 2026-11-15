@@ -16,6 +16,7 @@ public final class Toolbar extends JPanel {
     private final Button clearButton;
     private final Button seedFillButton;
     private final Button orientationButton;
+    private final Button modeButton;
 
     private static final Color DIVIDER = new Color(0x3A3E43);
     private static final Color BACKGROUND = new Color(0x25282C);
@@ -30,6 +31,8 @@ public final class Toolbar extends JPanel {
         ));
 
         JPanel fillControls = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        modeButton = new Button("Režim: Polygon", false);
+        fillControls.add(modeButton);
         seedFillButton = new Button("Seed fill", false);
         fillControls.setOpaque(false);
         fillControls.add(seedFillButton);
@@ -69,6 +72,14 @@ public final class Toolbar extends JPanel {
 
     public void addOrientationListener(ActionListener listener) {
         orientationButton.addActionListener(listener);
+    }
+
+    public void setLineMode(boolean lineMode) {
+        modeButton.setText("Režim: " + (lineMode ? "Úsečky" : "Polygon"));
+    }
+
+    public void addModeListener(ActionListener listener) {
+        modeButton.addActionListener(listener);
     }
 
 }
