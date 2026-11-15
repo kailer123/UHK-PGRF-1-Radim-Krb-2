@@ -16,25 +16,35 @@ public final class SutherlandHodgmanClipper implements PolygonClipper {
      */
     public Polygon clip(Polygon subject, Polygon boundary) {
         // TODO 1: Získejte seznam hran ořezávaného polygonu.
-
+        List<Line> subjectLines = subject.getLines();
         // TODO 2: Pomocí metody vertices() převeďte oba polygony na seznamy vrcholů.
-
+        List<Point> subjectVertices = vertices(subject);
+        List<Point> boundaryVertices = vertices(boundary);
         // TODO 3: Ověřte, zda mají polygony dostatečný počet vrcholů.
         //         - Pokud má ořezávaný polygon méně než 3 vrcholy, vraťte prázdný Polygon.
         //         - Pokud má ořezávací polygon méně než 3 vrcholy nebo nulovou plochu (area() == 0), vyvolejte IllegalArgumentException.
-
+        if (subjectVertices.size() < 3) return new Polygon();
+        if (boundaryVertices.size() < 3 || area(boundaryVertices) == 0) {
+            throw new IllegalArgumentException("Polygon has to have more than 3 polygons and more than 0 area");
+        }
         // TODO 4: Pomocí metody area() určete orientaci ořezávacího polygonu. Výsledek uložte do proměnné ccw.
         //         - Kladná hodnota znamená CCW (proti směru hodinových ručiček), záporná CW (ve směru hodinových ručiček).
-
+        boolean ccw = area(boundaryVertices) > 0;
         // TODO 5: Postupně projděte všechny hrany ořezávacího polygonu. Každá hrana je tvořena dvěma sousedními vrcholy (a, b).
         //         Nezapomeňte na poslední hranu, která spojuje poslední vrchol s prvním. Využijte operátor modulo (%).
-        {
+        List<Point> output = subjectVertices;
+        for (int i = 0; i < boundaryVertices.size(); i++){
             // TODO 6: Pro každou hranu zavolejte metodu clipEdge(). Výsledek aktuálního ořezání použijte jako vstup dalšího.
             //         Pokud během ořezávání zůstanou méně než 3 vrcholy, vraťte prázdný Polygon.
+            Point a = boundaryVertices.get(i);
+            Point b = boundaryVertices.get((i + 1) % boundaryVertices.size());
+            output = clipEdge(output, a, b, ccw);
+            if (output.size() < 3) return new Polygon();
         }
 
+
         // TODO 7: Pomocí metody toPolygon() převeďte výsledný seznam vrcholů zpět na Polygon a zachovejte barvu původních hran.
-        throw new UnsupportedOperationException("TODO: clip");
+        return toPolygon(output, subjectLines.getFirst().getColor());
     }
 
     /**
@@ -43,13 +53,12 @@ public final class SutherlandHodgmanClipper implements PolygonClipper {
      */
     public boolean isInside(Point p, Point a, Point b, boolean ccw) {
         // TODO 1: Pomocí metody cross() určete, na které straně orientované přímky AB leží bod P.
-
+        double side = cross(a,b,p);
         // TODO 2: Podle orientace ořezávacího polygonu (ccw) rozhodněte, zda bod leží uvnitř příslušné poloroviny:
         //         - CCW: Bod je uvnitř, pokud cross >= 0.
         //         - CW:  Bod je uvnitř, pokud cross <= 0.
         //         Bod ležící přímo na hranici považujte za vnitřní.
-
-        throw new UnsupportedOperationException("TODO: isInside");
+        return ccw && side >= 0  || !ccw && side <= 0;
     }
 
     /**
@@ -58,20 +67,26 @@ public final class SutherlandHodgmanClipper implements PolygonClipper {
      */
     public Point intersection(Point p, Point q, Point a, Point b) {
         // TODO 1: Pomocí metody cross() vypočítejte hodnoty d1 a d2, které určují polohu bodů P a Q vůči přímce AB.
+        double d1 = cross(a, b, p);
+        double d2 = cross(a, b, q);
 
+        if (d1 == d2) {
+            throw new IllegalArgumentException("Parallel line");
+        }
         // TODO 2: Vypočítejte parametr t určující polohu průsečíku na úsečce PQ:
         //                     d1
         //         t = -----------------
         //                   d1 - d2
         //         Pokud d1 == d2, jsou přímky rovnoběžné.
         //         V takovém případě vyvolejte IllegalArgumentException.
-
+        double t = d1 / (d1 - d2);
         // TODO 3: Pomocí parametru t vypočítejte souřadnice průsečíku:
         //         - x = Px + t * (Qx - Px)
         //         - y = Py + t * (Qy - Py)
-
+        double x = p.getX() + t * (q.getX() - p.getX());
+        double y = p.getY() + t * (q.getY() - p.getY());
         // TODO 4: Vypočtené souřadnice zaokrouhlete pomocí Math.round() na celá čísla a vraťte nový objekt Point.
-        throw new UnsupportedOperationException("TODO: intersection");
+        return new Point((int) Math.round(x), (int) Math.round(y));
     }
 
     /**
@@ -80,13 +95,16 @@ public final class SutherlandHodgmanClipper implements PolygonClipper {
      */
     private List<Point> clipEdge(List<Point> polygon, Point a, Point b, boolean ccw) {
         // TODO 1: Vytvořte prázdný seznam pro ukládání výsledných vrcholů.
-
+        List<Point> result = new ArrayList<>();
+        if (polygon.isEmpty()) {
+            return result;
+        }
         // TODO 2: Do proměnné previous uložte poslední vrchol polygonu.
         //         - Při první iteraci tak budete zpracovávat úsečku mezi posledním a prvním vrcholem polygonu.
-
+        Point previous = polygon.getLast();
         // TODO 3: Postupně projděte všechny vrcholy polygonu.
         //         - Pro každou dvojici (previous, current) pomocí isInside() zjistěte, zda jednotlivé vrcholy leží uvnitř ořezávací oblasti.
-        {
+        for (Point current : polygon){
             // TODO 4: Podle polohy obou vrcholů rozlište čtyři případy:
             //         UVNITŘ -> UVNITŘ:
             //             Přidejte aktuální vrchol (current).
@@ -96,12 +114,22 @@ public final class SutherlandHodgmanClipper implements PolygonClipper {
             //             Přidejte průsečík a poté aktuální vrchol (current).
             //         VNĚ -> VNĚ:
             //             Nepřidávejte žádný vrchol.
-
+            boolean previousInside = isInside(previous, a, b, ccw);
+            boolean currentInside = isInside(current, a, b, ccw);
+            if (previousInside && currentInside) {
+                result.add(current);
+            } else if (previousInside) {
+                result.add(intersection(previous, current, a, b));
+            } else if (currentInside) {
+                result.add(intersection(previous, current, a, b));
+                result.add(current);
+            }
+            previous = current;
             // TODO 5: Na konci každé iterace nastavte předchozí vrchol (previous) na aktuální (current).
         }
 
         // TODO 6: Vraťte seznam výsledných vrcholů.
-        throw new UnsupportedOperationException("TODO: clipEdge");
+        return result;
     }
 
     /* -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- Utilities -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
