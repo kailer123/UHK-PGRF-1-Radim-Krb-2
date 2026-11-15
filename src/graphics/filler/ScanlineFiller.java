@@ -64,7 +64,7 @@ public class ScanlineFiller implements PolygonFiller {
             }
 
             // Seřazení průsečíků a vyplnění pixelů mezi nimi
-            intersections.sort(null);
+            sortIntersections(intersections);
             // Projdeme jednotlivé průsečíky (vždy po dvouch)
             for (int i = 0; i + 1 < intersections.size(); i = i + 2) {
                 // Dopočítáme (zaokrouhlíme) x souřadnici odkud máme jít
@@ -78,6 +78,18 @@ public class ScanlineFiller implements PolygonFiller {
             }
         }
 
+    }
+
+    private void sortIntersections(List<Double> intersections) {
+        for (int i = 1; i < intersections.size(); i++) {
+            double current = intersections.get(i);
+            int j = i - 1;
+            while (j >= 0 && intersections.get(j) > current) {
+                intersections.set(j + 1, intersections.get(j));
+                j--;
+            }
+            intersections.set(j + 1, current);
+        }
     }
 
 }
